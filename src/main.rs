@@ -8,13 +8,13 @@ use clap::{command, Parser, Subcommand};
 #[command(author, version, about, long_about = None)]
 struct Cli {
     #[command(subcommand)]
-    copy_str: Option<CopyStr>
+    copy_str: Option<Command>
 }
 
 #[derive(Subcommand)]
-enum CopyStr {
+enum Command {
     // copy some strings of process `obj` to process `fake`.
-    Add{
+    CopyStr{
         #[arg(short, long)]
         obj: u32,
 
@@ -44,7 +44,7 @@ fn copy_str_2_process(obj: u32, fake: u32) {
 fn main() {
     let args: Cli = Cli::parse();
     match &args.copy_str {
-        Some(CopyStr::Add { obj, fake }) => {
+        Some(Command::CopyStr { obj, fake }) => {
             copy_str_2_process(*obj, *fake)
         },
         _ => {}
