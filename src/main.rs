@@ -3,7 +3,7 @@ mod process;
 
 use crate::process::{FakeProcess, ObjProcess, Process};
 use clap::{command, Parser, Subcommand};
-use crate::inject::Inject;
+use crate::inject::{Inject, WindowsHook};
 use anyhow::Result;
 
 #[derive(Parser)]
@@ -33,6 +33,10 @@ enum Command {
         #[arg(short, long)]
         name: Option<String>,
     },
+    WindowsHook {
+        #[arg(short, long)]
+        dll_path: String,
+    }
 }
 
 fn copy_str_2_process(obj: u32, fake: u32) {
@@ -70,6 +74,10 @@ fn inject_dll_2_process(dll_path: &String, pid: &Option<u32>, name: Option<&Stri
     Ok(())
 }
 
+fn set_windows_hook(dll_path: *const u8) {
+    WindowsHook::hook(dll_path).expect("[! Hide Process R3] SetWindowsHookEx failed.");
+}
+
 fn main() {
     let args: Cli = Cli::parse();
     match &args.command {
@@ -79,6 +87,7 @@ fn main() {
             pid,
             name,
         }) => inject_dll_2_process(dll_path, pid, name.as_ref()).unwrap(),
+        Some(Command::WindowsHook { dll_path }) => set_windows_hook(dll_path.as_ptr()),
         _ => {}
     }
 }
