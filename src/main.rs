@@ -1,10 +1,10 @@
 mod inject;
 mod process;
 
-use crate::process::{FakeProcess, ObjProcess, Process};
-use clap::{command, Parser, Subcommand};
 use crate::inject::{Inject, WindowsHook};
+use crate::process::{FakeProcess, ObjProcess, Process};
 use anyhow::Result;
+use clap::{command, Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(author = "mi1itray.axe", version = "0.1", about = "A simple tool to hide processes in R3", long_about = None)]
@@ -15,28 +15,36 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    // copy some strings of process `obj` to process `fake`.
+    /// copy some strings of process `obj` to process `fake`.
     CopyStr {
-        #[arg(short, long)]
+        #[arg(short, long, value_name = "PID")]
         obj: u32,
 
-        #[arg(short, long)]
+        #[arg(short, long, value_name = "PID")]
         fake: u32,
     },
+
+    /// Inject dll to the process
     InjectDll {
-        #[arg(short, long)]
+        /// dll file path
+        #[arg(short, long, value_name = "DLL PATH")]
         dll_path: String,
 
-        #[arg(short, long)]
+        /// process id which you want to inject it. pid or name just need one
+        #[arg(short, long, value_name = "PROCESS PID")]
         pid: Option<u32>,
 
-        #[arg(short, long)]
+        /// process name which you want to inject it. pid or name just need one
+        #[arg(short, long, value_name = "PROCESS NAME")]
         name: Option<String>,
     },
+
+    /// Use SetWindowsHookEx to global hook
     WindowsHook {
-        #[arg(short, long)]
+        /// dll file path
+        #[arg(short, long, value_name = "DLL PATH")]
         dll_path: String,
-    }
+    },
 }
 
 fn copy_str_2_process(obj: u32, fake: u32) {
