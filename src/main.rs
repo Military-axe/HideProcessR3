@@ -1,7 +1,9 @@
 mod inject;
+mod installsrv;
 mod process;
 
 use crate::inject::{Inject, WindowsHook};
+use crate::installsrv::svc_install;
 use crate::process::{FakeProcess, ObjProcess, Process};
 use anyhow::Result;
 use clap::{command, Parser, Subcommand};
@@ -45,6 +47,17 @@ enum Command {
         #[arg(short, long, value_name = "DLL PATH")]
         dll_path: String,
     },
+
+    /// Install Services
+    Services {
+        /// sys file path
+        #[arg(short, long, value_name = "SYS PATH")]
+        sys: String,
+
+        /// service name
+        #[arg(short, long, value_name = "SERVICE NAME")]
+        name: String,
+    },
 }
 
 fn copy_str_2_process(obj: u32, fake: u32) {
@@ -86,6 +99,10 @@ fn set_windows_hook(dll_path: *const u8) {
     WindowsHook::hook(dll_path).expect("[! Hide Process R3] SetWindowsHookEx failed.");
 }
 
+fn install_srv(sys: &str, name: &str) {
+    svc_install(sys, name).expect("Services install failed.");
+}
+
 fn main() {
     let args: Cli = Cli::parse();
     match &args.command {
@@ -96,6 +113,7 @@ fn main() {
             name,
         }) => inject_dll_2_process(dll_path, pid, name.as_ref()).unwrap(),
         Some(Command::WindowsHook { dll_path }) => set_windows_hook(dll_path.as_ptr()),
+        Some(Command::Services { sys, name }) => install_srv(sys, name),
         _ => {}
     }
 }
