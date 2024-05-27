@@ -1,5 +1,6 @@
 use anyhow::Result;
 use dll_syringe::{process::OwnedProcess, Syringe};
+use log::warn;
 use windows::core::PCSTR;
 use windows::Win32::{
     Foundation::{LPARAM, LRESULT, WPARAM},
@@ -39,7 +40,7 @@ impl WindowsHook {
         let hhook =
             unsafe { SetWindowsHookExA(WH_GETMESSAGE, Some(WindowsHook::GetMsgProc), hmod, 0) }?;
         if hhook.is_invalid() {
-            println!("[! Hide Process R3] SetWindowsHookExA is invalid");
+            warn!("[! Hide Process R3] SetWindowsHookExA is invalid");
         }
         Ok(())
     }

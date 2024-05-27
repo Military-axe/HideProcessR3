@@ -1,7 +1,7 @@
 use anyhow::{Error, Result};
 use windows::core::PCSTR;
 use windows::Win32::System::Services::{
-    SERVICE_ALL_ACCESS, SERVICE_DEMAND_START, SERVICE_ERROR_NORMAL, SERVICE_WIN32_OWN_PROCESS,
+    CloseServiceHandle, SERVICE_ALL_ACCESS, SERVICE_DEMAND_START, SERVICE_ERROR_NORMAL, SERVICE_WIN32_OWN_PROCESS
 };
 use windows::Win32::{
     Foundation::GetLastError,
@@ -10,6 +10,7 @@ use windows::Win32::{
         Services::{CreateServiceA, OpenSCManagerA, SC_MANAGER_ALL_ACCESS}
     ,
 };
+use log::{warn, info};
 
 /// 安装一个Windows服务。
 ///
@@ -37,7 +38,7 @@ pub fn svc_install(sys_path: &str, drive_name: &str) -> Result<()> {
 
     sc_manager = unsafe { OpenSCManagerA(None, None, SC_MANAGER_ALL_ACCESS)? };
     if sc_manager.is_invalid() {
-        println!("[! Hide Process] Open SC Mamager failed.");
+        warn!("[! Hide Process] Open SC Mamager failed.");
         return Err(Error::msg("Open SC Mamager failed."));
     }
 
@@ -60,13 +61,18 @@ pub fn svc_install(sys_path: &str, drive_name: &str) -> Result<()> {
     };
 
     if sc_service.is_invalid() {
-        println!("[! Hide Process] Create Service failed {:?}.", unsafe {
+        warn!("[! Hide Process] Create Service failed {:?}.", unsafe {
             GetLastError()
         });
+        unsafe { CloseServiceHandle(sc_manager)? };
         return Err(Error::msg("Create Service failed."));
     }
 
-    println!("[+ Hide Process]Service installed successfully");
+    unsafe { 
+        CloseServiceHandle(sc_service)?;
+        CloseServiceHandle(sc_manager)?;
+    }
+    info!("[+ Hide Process]Service installed successfully");
 
     Ok(())
 }

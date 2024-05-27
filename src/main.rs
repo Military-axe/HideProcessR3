@@ -7,12 +7,17 @@ use crate::installsrv::svc_install;
 use crate::process::{FakeProcess, ObjProcess, Process};
 use anyhow::Result;
 use clap::{command, Parser, Subcommand};
+use log::{debug, info, warn};
+use std::env::set_var;
 
 #[derive(Parser)]
 #[command(author = "mi1itray.axe", version = "0.1", about = "A simple tool to hide processes in R3", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
+
+    #[arg(short, long)]
+    debug: bool,
 }
 
 #[derive(Subcommand)]
@@ -69,8 +74,8 @@ fn copy_str_2_process(obj: u32, fake: u32) {
     let image_name = obj_process
         .get_image_name_2_vec()
         .expect("[! Hide Process R3] Get Image Name failed.");
-    println!("{:#?}", Process::pwstr_to_string(&command_line));
-    println!("{:#?}", Process::pwstr_to_string(&image_name));
+    debug!("{:#?}", Process::pwstr_to_string(&command_line));
+    debug!("{:#?}", Process::pwstr_to_string(&image_name));
 
     fake_process
         .set_command_line(command_line)
@@ -82,7 +87,7 @@ fn copy_str_2_process(obj: u32, fake: u32) {
 
 fn inject_dll_2_process(dll_path: &String, pid: &Option<u32>, name: Option<&String>) -> Result<()> {
     if pid.is_none() && name.is_none() {
-        println!("[! Hide Process R3] pid and name must have at least one parameter.");
+        warn!("[! Hide Process R3] pid and name must have at least one parameter.");
         return Ok(());
     }
 
@@ -91,6 +96,8 @@ fn inject_dll_2_process(dll_path: &String, pid: &Option<u32>, name: Option<&Stri
     } else {
         Inject::inject_dll_by_name(dll_path, name.unwrap().as_str())
     }
+
+    info!("Inject dll success");
 
     Ok(())
 }
@@ -105,6 +112,16 @@ fn install_srv(sys: &str, name: &str) {
 
 fn main() {
     let args: Cli = Cli::parse();
+
+    // Set Debug logger;
+    if args.debug {
+        set_var("RUST_LOG", "debug")
+    } else {
+        set_var("RUST_LOG", "info")
+    }
+
+    env_logger::init();
+
     match &args.command {
         Some(Command::CopyStr { obj, fake }) => copy_str_2_process(*obj, *fake),
         Some(Command::InjectDll {
