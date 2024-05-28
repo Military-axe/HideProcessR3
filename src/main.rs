@@ -1,15 +1,11 @@
 mod chainbreak;
-mod inject;
-mod installsrv;
 mod process;
+mod utils;
 
 use crate::chainbreak::BreakChain;
-use crate::inject::{Inject, WindowsHook};
-use crate::installsrv::svc_install;
 use crate::process::{FakeProcess, ObjProcess, Process};
-use anyhow::Result;
+use crate::utils::*;
 use clap::{command, Parser, Subcommand};
-use installsrv::svc_delete;
 use log::{debug, info, warn};
 use std::env::set_var;
 
@@ -95,33 +91,66 @@ fn copy_str_2_process(obj: u32, fake: u32) {
         .expect("[! Hide Process R3] Set Image Name failed.")
 }
 
-fn inject_dll_2_process(dll_path: &String, pid: &Option<u32>, name: Option<&String>) -> Result<()> {
+/// 注入Dll文件进入到进程中
+///
+/// # 参数
+///
+/// * `dll_path` - 需要注入的dll文件
+/// * `pid` - 被注入的进程id
+/// * `name` - 被注入的进程名称, pid, name两者选一个即可
+fn inject_dll_2_process(dll_path: &String, pid: &Option<u32>, name: Option<&String>) {
+    debug!("Dll path: {}; Pid: {:?}; Name: {:?}", dll_path, pid, name);
     if pid.is_none() && name.is_none() {
         warn!("[! Hide Process R3] pid and name must have at least one parameter.");
-        return Ok(());
-    }
-
-    if pid.is_some() {
-        Inject::inject_dll_by_pid(dll_path, pid.unwrap())
     } else {
-        Inject::inject_dll_by_name(dll_path, name.unwrap().as_str())
+        match pid {
+            None => Inject::inject_dll_by_name(dll_path, name.unwrap().as_str()),
+            Some(id) => Inject::inject_dll_by_pid(dll_path, *id),
+        }
+        info!("Inject dll success");
     }
-
-    info!("Inject dll success");
-
-    Ok(())
 }
 
 fn set_windows_hook(dll_path: *const u8) {
-    WindowsHook::hook(dll_path).expect("[! Hide Process R3] SetWindowsHookEx failed.");
+    match WindowsHook::hook(dll_path) {
+        Err(e) => warn!("SetWindowsHookEx failed: {:?}", e),
+        Ok(_) => info!("SetWindowsHookEx success"),
+    }
 }
 
+/// 安装驱动服务
+///
+/// # 参数
+///
+/// * `sys` - 驱动文件路径, 可以相对路径也可以绝对路径
+/// * `name` - 驱动服务名称
 fn install_srv(sys: &str, name: &str) {
-    if let Err(_) = svc_install(sys, name) {
-        debug!("service exists try to delete it.");
-        svc_delete(name).expect("Delete service failed.");
-        // try to install service success
-        svc_install(sys, name).expect("Install service failed.");
+    debug!("Try to install {} as Service: {}", sys, name);
+    match svc_install(sys, name) {
+        Err(_) => {
+            debug!("service exists try to delete it.");
+            if let Err(e) = svc_delete(name) {
+                warn!("Delete service failed: {:?}, try install again", e);
+            }
+            // try to install service success
+            if let Err(e) = svc_install(sys, name) {
+                warn!("Install service failed: {:?}", e);
+            }
+        }
+        Ok(_) => info!("Install Service Success"),
+    }
+}
+
+/// 通过R0中EPROCESS断联隐藏指定进程
+///
+/// # 参数
+///
+/// * `pid` - 需要隐藏的进程pid
+fn hide_by_break_chain(pid: u32) {
+    debug!("Hide pid: {} by Break Chains in EPROCESS", pid);
+    match BreakChain::hide_by_pid(pid) {
+        Ok(_) => info!("Hide Process by Break Chains success"),
+        Err(e) => warn!("Hide Process failed: {:?}", e),
     }
 }
 
@@ -143,12 +172,10 @@ fn main() {
             dll_path,
             pid,
             name,
-        }) => inject_dll_2_process(dll_path, pid, name.as_ref()).unwrap(),
+        }) => inject_dll_2_process(dll_path, pid, name.as_ref()),
         Some(Command::WindowsHook { dll_path }) => set_windows_hook(dll_path.as_ptr()),
         Some(Command::Services { sys, name }) => install_srv(sys, name),
-        Some(Command::ChainBreak { pid }) => {
-            BreakChain::hide_by_pid(*pid).expect("Send Pid to Driver failed.")
-        }
+        Some(Command::ChainBreak { pid }) => hide_by_break_chain(*pid),
         _ => {}
     }
 }
