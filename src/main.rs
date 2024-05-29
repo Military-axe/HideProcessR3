@@ -126,18 +126,25 @@ fn set_windows_hook(dll_path: *const u8) {
 /// * `name` - 驱动服务名称
 fn install_srv(sys: &str, name: &str) {
     debug!("Try to install {} as Service: {}", sys, name);
-    match svc_install(sys, name) {
+    match Service::install(sys, name) {
         Err(_) => {
             debug!("service exists try to delete it.");
-            if let Err(e) = svc_delete(name) {
+            if let Err(e) = Service::delete(name) {
                 warn!("Delete service failed: {:?}, try install again", e);
             }
+
             // try to install service success
-            if let Err(e) = svc_install(sys, name) {
+
+            if let Err(e) = Service::install(sys, name) {
                 warn!("Install service failed: {:?}", e);
             }
+
+            let _ = Service::start(name).map(|_| info!("Service is running now!"));
         }
-        Ok(_) => info!("Install Service Success"),
+        Ok(_) => {
+            info!("Install Service Success");
+            let _ = Service::start(name).map(|_| info!("Service is running now!"));
+        }
     }
 }
 

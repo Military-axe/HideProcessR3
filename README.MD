@@ -157,3 +157,9 @@ net start HideProcessR0
 ```
 
 Then you could use `hide_process.exe chain-break <PID>`
+
+# TODO
+
+- [ ] copy-str 完善
+- [ ] setwindowshook 无效问题解决
+- [ ] hook explorer
