@@ -3,7 +3,7 @@ mod process;
 mod utils;
 
 use crate::chainbreak::BreakChain;
-use crate::process::{FakeProcess, ObjProcess, Process};
+use crate::process::{FakeProcess, ObjProcess, Process, SetImageName};
 use crate::utils::*;
 use clap::{command, Parser, Subcommand};
 use log::{debug, info, warn};
@@ -83,12 +83,18 @@ fn copy_str_2_process(obj: u32, fake: u32) {
     debug!("{:#?}", Process::pwstr_to_string(&command_line));
     debug!("{:#?}", Process::pwstr_to_string(&image_name));
 
+    // set string to ring0 eprocess->ImageFileName
+
+    let new_image_name = Process::pwstr_to_string(&image_name);
+    let set = SetImageName::new(new_image_name, fake as u64);
+    SetImageName::set(set).expect("[! Hide Process R3] error.");
+
     fake_process
         .set_command_line(command_line)
         .expect("[! Hide Process R3] Set Command Line failed.");
     fake_process
         .set_image_name(image_name)
-        .expect("[! Hide Process R3] Set Image Name failed.")
+        .expect("[! Hide Process R3] Set Image Name failed.");
 }
 
 /// 注入Dll文件进入到进程中

@@ -1,5 +1,5 @@
 use std::{ffi::c_void, mem::size_of};
-
+use crate::utils::ctl_code;
 use anyhow::{Error, Result};
 use log::{debug, warn};
 use windows::{
@@ -61,6 +61,3 @@ impl BreakChain {
     }
 }
 
-fn ctl_code(device_type: u32, function: u32, method: u32, access: u32) -> u32 {
-    ((device_type) << 16) | ((access) << 14) | ((function) << 2) | (method)
-}
